@@ -131,3 +131,4 @@ Não foi realizado deploy na conta Vercel nem conexão com banco Turso real, poi
 - https://docs.turso.tech/sdk/ts/quickstart
 
 Licença das fontes PDF: `server/lib/pdf-font-license.txt`. Dependências de código aberto mantêm suas próprias licenças. A identidade e conteúdo Renovo permanecem pertencentes à empresa.
+Deploy Vercel
