@@ -1,0 +1,2 @@
+import {fail} from '../lib/server.js';
+export async function GET(req:Request){try{const cep=new URL(req.url).searchParams.get('cep')||'';if(!/^\d{8}$/.test(cep))throw Error('Informe um CEP válido.');const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/',{signal:AbortSignal.timeout(5000)});const data:any=await r.json();if(data.erro)throw Error('CEP não encontrado. Preencha cidade e estado.');return Response.json({cidade:data.localidade,estado:data.uf});}catch(e){return fail(e);}}
