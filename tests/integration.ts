@@ -15,6 +15,34 @@ const repeat:any=await(await request('/api/simulate',input)).json();assert.equal
 assert.equal((await request('/api/admin')).status,403);assert.equal((await request('/api/auth',{password:'senha-incorreta'})).status,401);
 const login=await request('/api/auth',{password:process.env.ADMIN_PASSWORD});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie')!.split(';')[0];assert(login.headers.get('set-cookie')!.includes('HttpOnly'));
 const list:any=await(await request('/api/admin',undefined,cookie)).json();assert.equal(list.leads.length,1);assert.equal(JSON.parse(list.leads[0].data).utm_source,'meta');
+
+// Marketing defaults to false and cannot be forged by arbitrary attribution fields.
+assert.equal(list.leads[0].marketing_consent,false);
+assert.equal((await request('/api/export')).status,403);
+assert.equal((await request('/api/export',undefined,'renovo_admin=forged')).status,403);
+const emptyCsv=await request('/api/export',undefined,cookie);
+assert.equal(emptyCsv.status,200);assert.equal(emptyCsv.headers.get('cache-control'),'no-store');
+assert(!(await emptyCsv.text()).includes('joao@example.com'));
+assert.equal((await request('/api/simulate',{...input,request_id:crypto.randomUUID(),consentimento_marketing:'true'})).status,400);
+const marketingInput={...input,request_id:crypto.randomUUID(),nome:'=Contato Teste',consentimento_marketing:true,tracking:{utm_source:'google',utm_campaign:'Campanha "Solar",\nNova',fbclid:'fb-test',gclid:'g-test',gbraid:'gb-test',wbraid:'wb-test',ttclid:'tt-test',utm_medium:'cpc',utm_content:'banner',utm_term:'solar',utm_id:'campaign-id',consentimento_marketing:'false',nome:'Sobrescrito'}};
+const marketingResponse=await request('/api/simulate',marketingInput);assert.equal(marketingResponse.status,200);
+const marketingLead:any=await marketingResponse.json();
+const saved=await database.prepare('SELECT * FROM leads WHERE id=?').bind(marketingLead.lead_id).first();
+const savedData=JSON.parse(saved.data),savedConsent=JSON.parse(saved.consent);
+assert.equal(savedData.nome,'=Contato Teste');assert.equal(savedData.consentimento_marketing,true);
+assert.equal(savedConsent.marketing.accepted,true);assert.equal(savedConsent.marketing.policy,'2');assert(savedConsent.marketing.at);
+for(const key of ['fbclid','gclid','gbraid','wbraid','ttclid','utm_id'])assert.equal(savedData[key],marketingInput.tracking[key as keyof typeof marketingInput.tracking]);
+await request('/api/simulate',{...marketingInput,consentimento_marketing:false});
+assert.equal(JSON.parse((await database.prepare('SELECT consent FROM leads WHERE id=?').bind(marketingLead.lead_id).first()).consent).marketing.accepted,true);
+const csvResponse=await request('/api/export',undefined,cookie);const csv=await csvResponse.text();
+assert.equal(csvResponse.headers.get('content-type'),'text/csv; charset=utf-8');assert(csvResponse.headers.get('content-disposition')!.includes('attachment'));
+assert(csv.includes(marketingLead.lead_id));assert(!csv.includes(lead.lead_id));assert(csv.includes("\"'=Contato Teste\""));assert(csv.includes('Campanha ""Solar"",\nNova'));assert(csv.includes('tt-test'));
+assert.equal((await request('/api/export',{},cookie)).status,405);
+// Legacy consent is never interpreted as marketing authorization.
+await database.prepare('UPDATE leads SET consent=? WHERE id=?').bind(JSON.stringify({accepted:true,policy:'1'}),marketingLead.lead_id).run();
+assert(!(await(await request('/api/export',undefined,cookie)).text()).includes(marketingLead.lead_id));
+assert.equal((await request('/api/admin',{action:'delete',id:marketingLead.lead_id},cookie)).status,200);
+
 assert.equal((await request('/api/admin',{action:'settings',data:{...list.settings,tariff:1.0}},cookie)).status,200);
 const form=new URLSearchParams({lead_id:lead.lead_id,request_id:input.request_id});const pdf=await handleRequest(new Request(base+'/api/proposal',{method:'POST',headers:{origin:base},body:form}));assert.equal(pdf.status,200);assert(pdf.headers.get('content-disposition')!.includes('attachment'));assert.equal(pdf.headers.get('content-type'),'application/pdf');assert(Buffer.from(await pdf.arrayBuffer()).toString('latin1').startsWith('%PDF-1.4'));
 assert.equal((await request('/api/proposal',{lead_id:lead.lead_id,request_id:crypto.randomUUID()})).status,404);
