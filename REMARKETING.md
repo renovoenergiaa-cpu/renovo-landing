@@ -1,7 +1,7 @@
 # Leads e remarketing
 
 ## Consentimento
-O contato da simulação continua obrigatório; marketing é opcional, desmarcado por padrão e não bloqueia atendimento, PDF ou WhatsApp. `consentimento_marketing` aceita somente booleano; omissão significa falso. O servidor registra texto, versão 2 e horário da autorização. Repetir `request_id` retorna a simulação original sem alterar consentimento.
+As caixas de contato e marketing foram removidas do formulário. O envio solicita a proposta e o atendimento relacionado. O formulário envia ambos os campos como false; novos contatos não entram na exportação de marketing. `consentimento_marketing` aceita somente booleano; omissão significa falso. O servidor registra texto e horário somente quando a autorização correspondente é explicitamente true; false não produz uma autorização. Repetir `request_id` retorna a simulação original sem alterar consentimento.
 
 ## Turso V4
 Sem migrações, colunas novas ou mudanças em `database.ts`. A coluna `consent` mantém `accepted`, `at`, `policy` e acrescenta `text` e `marketing: {accepted, at, policy, text}`. A coluna `data` e o payload do webhook recebem os campos de marketing e atribuição. Leads antigos sem `marketing.accepted === true` não são exportados.
